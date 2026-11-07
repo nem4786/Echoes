@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Echoes — prototype</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app">
+  <header class="top">
+    <div class="title">
+      <h1>Echoes</h1>
+      <span id="levelName" class="level-name"></span>
+    </div>
+    <div class="turn">Turn <b id="turnCount">0</b></div>
+  </header>
+
+  <nav id="levelBar" class="level-bar" aria-label="Levels"></nav>
+
+  <div id="stage" class="stage">
+    <canvas id="board" aria-label="Game board"></canvas>
+    <div id="winOverlay" class="overlay hidden">
+      <div class="overlay-card">
+        <div class="overlay-title">Solved</div>
+        <div id="winStats" class="overlay-stats"></div>
+        <button id="nextBtn" class="primary">Next level ⏎</button>
+      </div>
+    </div>
+    <div id="errorBox" class="error hidden"></div>
+  </div>
+
+  <section class="history" aria-label="Move history">
+    <div class="history-label">Your moves <span class="muted">— newest on the right; tags show what each echo copies next turn</span></div>
+    <div id="historyStrip" class="history-strip"></div>
+  </section>
+
+  <section class="pad" aria-label="Controls">
+    <div class="dpad">
+      <button data-act="U" class="k up" aria-label="Up">▲</button>
+      <button data-act="L" class="k left" aria-label="Left">◀</button>
+      <button data-act="W" class="k wait" aria-label="Wait">WAIT</button>
+      <button data-act="R" class="k right" aria-label="Right">▶</button>
+      <button data-act="D" class="k down" aria-label="Down">▼</button>
+    </div>
+    <div class="side">
+      <button id="undoBtn" class="k wide">↶ Undo <kbd>Z</kbd></button>
+      <button id="restartBtn" class="k wide">⟲ Restart <kbd>R</kbd></button>
+    </div>
+  </section>
+
+  <p class="help">Arrows / WASD move · <kbd>Space</kbd> wait · <kbd>Z</kbd> undo · <kbd>R</kbd> restart · swipe on the board on touch screens</p>
+
+  <details id="dev" class="dev">
+    <summary>Dev tools</summary>
+    <div class="dev-row">
+      <button id="solveBtn">Solve this level</button>
+      <button id="hintBtn">Solve from current state</button>
+      <button id="playSolBtn" disabled>Play solution</button>
+      <button id="checkAllBtn">Check all levels</button>
+    </div>
+    <pre id="devOut" class="dev-out">Solver: breadth-first search over (player, echoes, last N moves). Results appear here.</pre>
+  </details>
+</main>
+
+<!-- Classic scripts (no modules) so index.html works straight from disk. -->
+<script src="js/engine.js"></script>
+<script src="js/solver.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
