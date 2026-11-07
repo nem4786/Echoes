@@ -11,17 +11,28 @@
   'use strict';
   var E = (root.Echoes = root.Echoes || {});
 
-  function normalize(level, s) {
-    var m = level.maxN;
-    var h = s.history.slice(Math.max(0, s.history.length - m));
-    while (h.length < m) h.unshift('W');
-    return { turn: m, px: s.px, py: s.py, echoes: s.echoes, history: h, won: s.won, last: null };
-  }
-
-  function keyOf(s) {
-    var k = s.px + ',' + s.py;
-    for (var i = 0; i < s.echoes.length; i++) k += '|' + s.echoes[i].x + ',' + s.echoes[i].y;
-    return k + '|' + s.history.join('');
+  // Compact key: one char per position (cell index) + the last maxN actions.
+  function makeCodec(level) {
+    var W = level.width, m = level.maxN, starts = level.start.echoes, ne = starts.length;
+    return {
+      encode: function (s) {
+        var k = String.fromCharCode(s.py * W + s.px);
+        for (var i = 0; i < ne; i++) k += String.fromCharCode(s.echoes[i].y * W + s.echoes[i].x);
+        var h = s.history, L = h.length;
+        for (var j = m; j >= 1; j--) k += L - j >= 0 ? h[L - j] : 'W';
+        return k;
+      },
+      decode: function (k) {
+        var c = k.charCodeAt(0);
+        var s = { turn: m, px: c % W, py: (c / W) | 0, echoes: new Array(ne), history: null, won: false, last: null };
+        for (var i = 0; i < ne; i++) {
+          c = k.charCodeAt(1 + i);
+          s.echoes[i] = { n: starts[i].n, x: c % W, y: (c / W) | 0 };
+        }
+        s.history = k.slice(1 + ne).split('');
+        return s;
+      }
+    };
   }
 
   /**
@@ -36,50 +47,41 @@
     var maxStates = opts.maxStates || 2000000;
     var actions = E.ACTIONS.filter(function (a) { return !(opts.noWait && a === 'W'); });
 
-    var start = normalize(level, opts.start || E.initialState(level));
-    var startKey = keyOf(start);
-    var parent = new Map();
-    parent.set(startKey, null);
-    var queue = [start], keys = [startKey];
-    var head = 0;
+    var codec = makeCodec(level);
+    var start = opts.start || E.initialState(level);
+    if (start.won) return { solved: true, solution: '', length: 0, explored: 1, capped: false };
 
-    function path(key) {
+    // ids are assigned in BFS order, so keys[] doubles as the queue
+    var ids = new Map(), keys = [], parent = [], via = [];
+    var k0 = codec.encode(start);
+    ids.set(k0, 0); keys.push(k0); parent.push(-1); via.push('');
+
+    function path(id) {
       var out = [];
-      while (true) {
-        var p = parent.get(key);
-        if (!p) break;
-        out.push(p.a);
-        key = p.k;
-      }
+      while (parent[id] >= 0) { out.push(via[id]); id = parent[id]; }
       return out.reverse().join('');
     }
 
-    if (start.won) return { solved: true, solution: '', length: 0, explored: 1, capped: false };
-
-    while (head < queue.length) {
-      var s = queue[head], sk = keys[head];
-      head++;
+    for (var head = 0; head < keys.length; head++) {
+      var s = codec.decode(keys[head]);
       for (var ai = 0; ai < actions.length; ai++) {
         var a = actions[ai];
         var n = E.step(level, s, a);
         if (opts.noBump && a !== 'W' && n.last.player.blocked) continue;
-        n = normalize(level, n);
-        var nk = keyOf(n);
-        if (parent.has(nk)) continue;
-        parent.set(nk, { k: sk, a: a });
+        var nk = codec.encode(n);
+        if (ids.has(nk)) continue;
+        var id = keys.length;
+        ids.set(nk, id); keys.push(nk); parent.push(head); via.push(a);
         if (n.won) {
-          var sol = path(nk);
-          return { solved: true, solution: sol, length: sol.length, explored: parent.size, capped: false };
+          var sol = path(id);
+          return { solved: true, solution: sol, length: sol.length, explored: keys.length, capped: false };
         }
-        if (parent.size >= maxStates) {
-          return { solved: false, solution: null, length: -1, explored: parent.size, capped: true };
+        if (keys.length >= maxStates) {
+          return { solved: false, solution: null, length: -1, explored: keys.length, capped: true };
         }
-        queue.push(n); keys.push(nk);
       }
-      // free memory as we go
-      queue[head - 1] = null;
     }
-    return { solved: false, solution: null, length: -1, explored: parent.size, capped: false };
+    return { solved: false, solution: null, length: -1, explored: keys.length, capped: false };
   }
 
   /**

@@ -200,7 +200,7 @@
     if (!game.level) return;
     var lvl = game.level;
     var maxW = Math.min(stage.clientWidth || 720, 720);
-    var maxH = Math.max(220, Math.min(window.innerHeight * 0.58, 620));
+    var maxH = Math.max(220, Math.min(window.innerHeight * 0.62, 680));
     var tile = Math.floor(Math.min(maxW / lvl.width, maxH / lvl.height, 72));
     var dpr = window.devicePixelRatio || 1;
     var w = tile * lvl.width, h = tile * lvl.height;
@@ -280,25 +280,47 @@
     if (game.playTimer) { clearInterval(game.playTimer); game.playTimer = null; }
   }
 
+  // Runs the variants one at a time so the page can repaint between them
+  // (the biggest levels explore a few hundred thousand states per search).
   $('solveBtn').addEventListener('click', function () {
-    out.textContent = 'Solving "' + game.level.name + '"…';
-    setTimeout(function () {
-      var r = E.analyze(game.level);
-      game.lastSolution = { from: 'start', actions: r.best.solution };
-      $('playSolBtn').disabled = !r.best.solved;
-      var lines = [
-        game.level.name + '  (' + r.best.explored + ' states, ' + r.ms + ' ms)',
-        '  shortest       ' + fmtResult(r.best),
-        '  without WAIT   ' + fmtResult(r.noWait),
-        '  without bumps  ' + fmtResult(r.noBump),
-        '  neither        ' + fmtResult(r.noBoth)
-      ];
-      if (r.intended) lines.push('  intended       ' + (r.intended.ok ? 'works' : 'BROKEN') + ', ' + r.intended.length + ' moves' +
-        (r.best.solved && r.intended.length > r.best.length ? '  ← solver found something shorter!' : ''));
-      var note = ECHOES_LEVELS[game.index].note;
-      if (note) lines.push('', 'Note: ' + note);
+    var lvl = game.level, def = ECHOES_LEVELS[game.index];
+    var lines = [lvl.name, '  shortest       solving…'];
+    out.textContent = lines.join('\n');
+    var t0 = Date.now(), best = null;
+    var steps = [
+      ['shortest      ', {}],
+      ['without WAIT  ', { noWait: true }],
+      ['without bumps ', { noBump: true }],
+      ['neither       ', { noWait: true, noBump: true }]
+    ];
+    var i = 0;
+    function run() {
+      if (game.level !== lvl) return; // level changed meanwhile
+      var r = E.solve(lvl, steps[i][1]);
+      lines[1 + i] = '  ' + steps[i][0] + ' ' + fmtResult(r);
+      if (i === 0) {
+        best = r;
+        lines[0] = lvl.name + '  (' + r.explored + ' states)';
+        game.lastSolution = { from: 'start', actions: r.solution };
+        $('playSolBtn').disabled = !r.solved;
+      }
+      i++;
+      if (i < steps.length) {
+        lines[1 + i] = '  ' + steps[i][0] + ' solving…';
+        out.textContent = lines.join('\n');
+        setTimeout(run, 15);
+        return;
+      }
+      if (lvl.solution) {
+        var ok = E.replay(lvl, lvl.solution).won;
+        lines.push('  intended       ' + (ok ? 'works' : 'BROKEN') + ', ' + lvl.solution.length + ' moves' +
+          (best.solved && lvl.solution.length > best.length ? '  ← solver found something shorter!' : ''));
+      }
+      lines.push('  (' + (Date.now() - t0) + ' ms)');
+      if (def.note) lines.push('', 'Note: ' + def.note);
       out.textContent = lines.join('\n');
-    }, 20);
+    }
+    setTimeout(run, 20);
   });
 
   $('hintBtn').addEventListener('click', function () {
@@ -336,18 +358,18 @@
         out.textContent = lines.join('\n');
         return;
       }
-      var r = E.analyze(levels[i]);
+      // Shortest + intended only, to keep this quick; "Solve this level"
+      // (or `node tools/check-levels.js`) gives the WAIT/bump variants.
+      var lvl = levels[i];
+      var best = E.solve(lvl);
+      var intended = lvl.solution ? { ok: E.replay(lvl, lvl.solution).won, length: lvl.solution.length } : null;
       var flag = '';
-      if (!r.best.solved) { flag = '  ✗ unsolvable'; problems++; }
-      else if (r.intended && !r.intended.ok) { flag = '  ✗ intended solution broken'; problems++; }
-      else if (r.intended && r.intended.length > r.best.length) flag = '  ⚠ shorter than intended';
+      if (!best.solved) { flag = '  ✗ unsolvable'; problems++; }
+      else if (intended && !intended.ok) { flag = '  ✗ intended solution broken'; problems++; }
+      else if (intended && intended.length > best.length) flag = '  ⚠ shorter than intended';
       lines.push(
-        (i + 1) + '. ' + r.name + flag,
-        '   shortest ' + fmtResult(r.best),
-        '   no WAIT: ' + (r.noWait.solved ? r.noWait.length : '✗') +
-        ' · no bumps: ' + (r.noBump.solved ? r.noBump.length : '✗') +
-        ' · neither: ' + (r.noBoth.solved ? r.noBoth.length : '✗') +
-        (r.intended ? ' · intended: ' + r.intended.length + (r.intended.ok ? '' : ' (broken)') : '')
+        (i + 1) + '. ' + lvl.name + flag,
+        '   shortest ' + fmtResult(best) + (intended ? '  · intended ' + intended.length + (intended.ok ? '' : ' (broken)') : '')
       );
       out.textContent = lines.join('\n');
       i++;

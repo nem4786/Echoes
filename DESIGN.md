@@ -49,6 +49,31 @@ In every level the designer's intended solution is the shortest one; the solver 
 
 **Difficulty curve caveats.** 4 → 5 drops in move count but needs a new idea. 8 is a real jump: it's the first level where you have to plan both echoes' paths at once. Levels 3 and 5 are the only ones where WAIT or a bump is strictly required; elsewhere WAIT and bump-stalls are interchangeable.
 
+### Part two (levels 9–20)
+
+All twelve rely on wall bumps as programming; in every one but Handshake, the level can't be solved without them. Shortest solutions go up steadily from 22 to 42 moves. Every door was also checked to be a real chokepoint: turning it into a wall makes the level unsolvable, so no plate is decorative.
+
+| # | Name | Idea | Shortest | Search size |
+|---|------|------|----------|-------------|
+| 9 | Stack | Two echoes share a maze and block each other; stack both into a two-plate dead end | 22 | 108k |
+| 10 | Slow Switch | Two-cell "switch": standing on b opens doors, but each toggle is also a move the N=4 echo copies | 22 | 16k |
+| 11 | Corridor Gate | You only move up/down. Echo 1 holds b for your door B, echo 2 holds a | 24 | 35k |
+| 12 | Gatekeeper | Roles reversed: you hold b so the echo can pass B | 25 | 7k |
+| 13 | Trio | Three echoes, three mazes, one program, AND-door | 27 | 212k |
+| 14 | Series | Two doors in a row on your path, held by two different echoes | 29 | 74k |
+| 15 | Long Wait | Gatekeeper room with N=3; you have to come back to b twice | 29 | 31k |
+| 16 | Handshake | One echo: you hold b for it, it holds c for you, then it holds a | 30 (38 without bumps) | 20k |
+| 17 | Switch | The switch with two echoes (N=2, N=3) | 30 | 55k |
+| 18 | Closet Relay | You can't move; echo 1 holds b while echo 2 passes B | 32 | 8k |
+| 19 | Switchboard | Your switch opens B for echo 2, which holds c for echo 3, which holds a | 37 | 34k |
+| 20 | Relay Chain | Closet. 1 holds b for 2, 2 holds c for 3, 3 holds a. The finale | 42 | 383k |
+
+**How these were made.** Layouts were drawn by hand. The exact plate positions were then tuned with the solver: a script tried every combination of a few hand-picked candidate cells and kept the placement with the longest shortest-solution. The tuning scripts aren't in the repo; ask if you want them.
+
+**Rule fact found while designing.** On the two-cell switch (levels 10, 17, 19), an N=1 echo can never get through a door you control. You're on the plate only if your last left/right was L, so its entry move has to be followed right away by your L, and the echo copies that L on the very next turn, which pulls it back out. That's why every switch level uses N ≥ 2.
+
+**Curve notes.** Long Wait reuses Gatekeeper's room on purpose (same room, longer memory). Three of the last five levels are "closet" programming puzzles, because they give the longest solutions with the smallest search. If they feel samey, Switch and Switchboard are the templates to build more player-movement levels from.
+
 ## Ideas for future twists
 - **Mirror echoes** (e.g. a block labelled –2) replay the *opposite* move. Great for symmetric two-maze puzzles.
 - **Number tiles**: stepping on a +1/–1 tile changes an echo's N. Shifting the delay mid-level changes which past move it reads.
@@ -63,5 +88,5 @@ In every level the designer's intended solution is the shortest one; the solver 
 
 ## Tech notes
 - `engine.js` is pure: `step(level, state, action) -> newState`. No DOM, no mutation. Porting to C#: `Level` (immutable), `State` (struct-like, copy per step), one static `Step`.
-- `solver.js`: BFS. The search state is player + echo positions + the last maxN actions, padded with W. The turn counter isn't needed, because a charging echo behaves exactly like one replaying WAIT. The largest current level explores about 14k states.
+- `solver.js`: BFS. The search state is player + echo positions + the last maxN actions, padded with W. The turn counter isn't needed, because a charging echo behaves exactly like one replaying WAIT. States are stored as compact string keys (one character per position plus the history), with parent links in flat arrays. The largest level (20) explores about 383k states: about 3 s in Node or a browser. "Check all levels" in the browser computes only the shortest solution and checks the intended one; "Solve this level" adds the WAIT/bump variants.
 - `tools/check-levels.js`: the same checks from the command line (`node tools/check-levels.js`).
